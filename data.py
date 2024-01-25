@@ -77,11 +77,11 @@ def PDTC_source_5fold(drug):
     gdsc1_target_df = gdsc1_target_df.loc[gdsc1_target_df.index.difference(gdsc2_target_df.index)]
     gdsc_target_df = pd.concat([gdsc1_target_df, gdsc2_target_df])
     target_df = gdsc_target_df.reset_index().pivot_table(values=measurement, index='COSMIC_ID', columns='DRUG_NAME')
-    ccle_sample_file = os.path.join('11.9mypdtctest', 'ccle_sample_info.csv')
+    ccle_sample_file = os.path.join('data', 'ccle_sample_info.csv')
     ccle_sample_info = pd.read_csv(ccle_sample_file, index_col=4)
     ccle_sample_info = ccle_sample_info.loc[ccle_sample_info.index.dropna()]
     ccle_sample_info.index = ccle_sample_info.index.astype('int')
-    gdsc_sample_file = os.path.join('11.9mypdtctest', 'gdsc_cell_line_annotation.csv')
+    gdsc_sample_file = os.path.join('data', 'gdsc_cell_line_annotation.csv')
     gdsc_sample_info = pd.read_csv(gdsc_sample_file, header=0, index_col=1)
     gdsc_sample_info = gdsc_sample_info.loc[gdsc_sample_info.index.dropna()]
     gdsc_sample_info.index = gdsc_sample_info.index.astype('int')
@@ -127,18 +127,18 @@ def PDTC_target_data(drug):
     drug_feature_df = pdtc_features_df.loc[labeled_samples]
     threshold = np.median(drug_target_vec)
     drug_label_vec = (drug_target_vec < threshold).astype('int')
-    tcga_features = torch.from_numpy(drug_feature_df.values).type(torch.float32).to(device)
-    tcga_label = torch.from_numpy(drug_label_vec.values).type(torch.float32).squeeze().to(device)
-    return (tcga_features, tcga_label)
+    pdtc_features = torch.from_numpy(drug_feature_df.values).type(torch.float32).to(device)
+    pdtc_label = torch.from_numpy(drug_label_vec.values).type(torch.float32).squeeze().to(device)
+    return (pdtc_features, pdtc_label)
 
 def PDTC_data_generator(drug):
     drug_mapping_df = pd.read_csv(os.path.join('data', 'pdtc_gdsc_drug_mapping.csv'), index_col=0)
     drug_name = drug_mapping_df.loc[drug, 'drug_name']
-    tcga_data = PDTC_target_data(drug_name)
+    pdtc_data = PDTC_target_data(drug_name)
     gdsc_drug = drug_mapping_df.loc[drug, 'gdsc_name']
     ccle_data_tuple = PDTC_source_5fold(gdsc_drug)
     for ccle_train_data, ccle_eval_data in ccle_data_tuple:
-        yield (ccle_train_data, ccle_eval_data, tcga_data)
+        yield (ccle_train_data, ccle_eval_data, pdtc_data)
 
 
 def TCGA_source_5fold(drug):
