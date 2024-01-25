@@ -205,7 +205,7 @@ def pretrain(sourcedata, targetdata, param, parent_folder):
             # start train
             for model in models:
                 model.train()
-            print("train")
+            # print("train")
             for i, ccledata in enumerate(sourcetrainloader):
                 tcgadata = next(iter(targettrainloader))
                 optimizer.zero_grad()
@@ -244,7 +244,7 @@ def pretrain(sourcedata, targetdata, param, parent_folder):
                 "VAE_loss": train_epoch_vaeloss
             })
             append_file(trainloss_logfile, trainloss_logdict)
-            print("eval")
+            # print("eval")
             with torch.no_grad():
 
                 pccle_re_x, pccle_z, pccle_mu, pccle_sigma = source_private_vae(sourcetest)
@@ -576,11 +576,8 @@ def step_1_finetune(parent_folder, drug_list, drug_smiles, datatype):
                 addauc = 0
                 for data in data_generator:
                     temp_folder = os.path.join(drug_auc_folder,"ftepoch"+str(param['train_num_epochs'])+",lr:"+str(fine_tune_dict['ftlr'])+",CosAL:"+str(fine_tune_dict['scheduler_flag']))
-                    if os.path.exists(temp_folder) == False:
-                        os.mkdir(temp_folder)
                     log_folder = os.path.join(temp_folder, 'log')
-                    if os.path.exists(log_folder) == False:
-                        os.mkdir(log_folder)
+                    safemakedirs(log_folder)
                     test_auc_log_name = os.path.join(temp_folder, 'step1_test_auc.txt')
                     temp_encoder = VAE(input_size=1426, output_size=1426, latent_size=32, hidden_size=128).to(device)
                     temp_encoder.load_state_dict(encoder_state_dict)
@@ -610,7 +607,7 @@ def step_1_finetune(parent_folder, drug_list, drug_smiles, datatype):
                         if meanauc > all_metrics[drug]:
                             all_metrics[drug] = meanauc
                             all_metrics[drug+'folder'] = temp_folder
-                        print('mean auc:', addauc/5)
+                        print('pretrain mean auc:', addauc/5)
                         with open(test_auc_log_name,'w') as f:
                             for item in test_auc_list:
                                 f.write(str(item)+'\n')
@@ -971,7 +968,7 @@ def p_fine_tune(Data, classifymodel, kfold_num, folder):
     step3_optimizer = optim.AdamW(chain(*[lowencoder.parameters(), lin.parameters(), r_model.parameters()]),lr=0.0001)
     step4_optimizer = optim.AdamW(chain(*[lin.parameters(), classifymodel.parameters(), r_model.parameters()]), lr=0.0001)
     best_eval_metrics2 = {'EPOCH': 0,'AUC': 0,'AUPRC': 0,'Accuracy': 0}
-    best_test_metrics2 = {'EPOCH': 0,'AUC': 0,'AUPRC': 0,'Accuracy': 0}
+    # best_test_metrics2 = {'EPOCH': 0,'AUC': 0,'AUPRC': 0,'Accuracy': 0}
     tolerance = 0
     # max_tolerance= 20
     step2_tolerance = 0
@@ -995,33 +992,36 @@ def p_fine_tune(Data, classifymodel, kfold_num, folder):
         if step2_tolerance >= step2_max_tolerance:
             break
     best_c1_afterp = None
+    result_prediction = None
     for epoch in range(step3_4epochs):
         idx = p_step4(Data, step4_optimizer, best_lowencoder, classifymodel, epoch, best_M_encoder, best_lin, best_r_model)
         with torch.no_grad():
-
             tcgacat = target_data[0]
             ccleevalcat = source_test_data[0]
             # predict
-            test_y_pred = classifymodel(tcgacat).cpu().detach().numpy()
+            # test_y_pred = classifymodel(tcgacat).cpu().detach().numpy()
+            test_y_pred = torch.sigmoid(test_y_pred)
             eval_y_pred = classifymodel(ccleevalcat).cpu().detach().numpy()
+            # eval_y_pred = torch.sigmoid(eval_y_pred)
             eval_y_true = source_test_data[1].cpu().detach().numpy()
-            test_y_true = target_data[1].cpu().detach().numpy()
+            # test_y_true = target_data[1].cpu().detach().numpy()
             # metrics eval
             eval_auc = roc_auc_score(eval_y_true, eval_y_pred)
-            eval_auprc = average_precision_score(eval_y_true,eval_y_pred)
+            eval_auprc = average_precision_score(eval_y_true, eval_y_pred)
             eval_acc = accuracy_score(eval_y_true, (eval_y_pred>0.5).astype('int'))
             eval_metrics = {'EPOCH': epoch,'AUC': eval_auc,'AUPRC': eval_auprc,'Accuracy': eval_acc}
             # metrics test
-            test_auc = roc_auc_score(test_y_true, test_y_pred)
-            test_auprc = average_precision_score(test_y_true,test_y_pred)
-            test_acc = accuracy_score(test_y_true, (test_y_pred>0.5).astype('int'))
-            test_metrics = {'EPOCH': epoch,'AUC': test_auc,'AUPRC': test_auprc,'Accuracy': test_acc}
+            # test_auc = roc_auc_score(test_y_true, test_y_pred)
+            # test_auprc = average_precision_score(test_y_true,test_y_pred)
+            # test_acc = accuracy_score(test_y_true, (test_y_pred>0.5).astype('int'))
+            # test_metrics = {'EPOCH': epoch,'AUC': test_auc,'AUPRC': test_auprc,'Accuracy': test_acc}
             if eval_metrics['AUC'] >= best_eval_metrics2['AUC']:
-                best_eval_metrics2.update(eval_metrics)
-                best_eval_metrics2['EPOCH'] = epoch
-                best_test_metrics2.update(test_metrics)
-                best_test_metrics2['EPOCH'] = epoch
-                temp_log = {'epoch':epoch,"eval auc=":eval_metrics['AUC'],"test auc=":test_metrics['AUC']}
+                result_prediction = test_y_pred
+                # best_eval_metrics2.update(eval_metrics)
+                # best_eval_metrics2['EPOCH'] = epoch
+                # best_test_metrics2.update(test_metrics)
+                # best_test_metrics2['EPOCH'] = epoch
+                # temp_log = {'epoch':epoch,"eval auc=":eval_metrics['AUC'],"test auc=":test_metrics['AUC']}
                 tolerance = 0
                 # best model
                 best_c1_afterp = classifymodel
@@ -1032,11 +1032,13 @@ def p_fine_tune(Data, classifymodel, kfold_num, folder):
             break
 
     torch.save(best_c1_afterp.state_dict(), os.path.join(kfold_model_folder, 'p_classifier.pth'))
-    return best_test_metrics2
+    return result_prediction
 
 def prototype_learning(drug_list, step1_metrics, datatype):
-    resultdf = pd.DataFrame(index=drug_list, columns=['auc', 'aucvar', 'aupr', 'auprvar'])
+    # resultdf = pd.DataFrame(index=drug_list, columns=['auc', 'aucvar', 'aupr', 'auprvar'])
     for drug in drug_list:
+        result_p_path = os.path.join('result_folder', 'presult_'+drug)
+        safemakedirs(result_p_path)
         print('train drug:', drug)
         drugauc = 0
         drugaupr = 0
@@ -1062,31 +1064,32 @@ def prototype_learning(drug_list, step1_metrics, datatype):
             test_feature = torch.load(os.path.join(temp_folder, 'log', str(i)+'_fold_testfeature'))
             source_train_data, source_test_data, target_data = data[0], data[1], data[2]
             new_data = (train_feature, source_train_data[1]),(eval_feature, source_test_data[1]),(test_feature, target_data[1])
-            test_history = p_fine_tune(
+            result_prediction = p_fine_tune(
                 Data = new_data,
-                classifymodel=classifymodel,
+                classifymodel = classifymodel,
                 kfold_num = i,
                 folder = proto_folder
             )
-            test_history_list.append(test_history)
-            drugauc += test_history['AUC']
-            drug_auc_list.append(test_history['AUC'])
-            drugaupr += test_history['AUPRC']
-            drugaupr_list.append(test_history['AUPRC'])
+            # test_history_list.append(test_history)
+            # drugauc += test_history['AUC']
+            # drug_auc_list.append(test_history['AUC'])
+            # drugaupr += test_history['AUPRC']
+            # drugaupr_list.append(test_history['AUPRC'])
             i=i+1
-            if i==5:
-                resultdf.at[drug, 'auc'] = sum(drug_auc_list)/len(drug_auc_list)
-                resultdf.at[drug, 'aupr'] = sum(drugaupr_list)/len(drugaupr_list)
-                resultdf.at[drug, 'aucvar'] = np.var(drug_auc_list)
-                resultdf.at[drug, 'auprvar'] = np.var(drugaupr_list)
-                with open(test_auc_log_name,'w') as f1:
-                    for item in test_history_list:
-                        f1.write(str(item)+'\n')
-                f1.close()
+            np.save(os.path.join(result_p_path, str(i)+'_fold.npy'), result_prediction)
+            # if i==5:
+            #     resultdf.at[drug, 'auc'] = sum(drug_auc_list)/len(drug_auc_list)
+            #     resultdf.at[drug, 'aupr'] = sum(drugaupr_list)/len(drugaupr_list)
+            #     resultdf.at[drug, 'aucvar'] = np.var(drug_auc_list)
+            #     resultdf.at[drug, 'auprvar'] = np.var(drugaupr_list)
+            #     with open(test_auc_log_name,'w') as f1:
+            #         for item in test_history_list:
+            #             f1.write(str(item)+'\n')
+            #     f1.close()
     # print(presult)
-    result_path = os.path.join('result' , 'p_result.csv')
-    safemakedirs(result_path)
-    resultdf.to_csv(result_path, index=True)
+    # result_path = os.path.join('result' , 'p_result.csv')
+    # safemakedirs(result_path)
+    # resultdf.to_csv(result_path, index=True)
 
 
 
@@ -1103,7 +1106,7 @@ def main(drug_list, drug_smiles, datatype):
     step_prototype_learning(parent_folder, drug_list, drug_smiles, datatype)
 
 if __name__ == '__main__':
-    for datatype in ['PDTC', 'TCGA']:
+    for datatype in ['TCGA', 'PDTC', 'TCGA']:
         if datatype == 'PDTC':
             pdtc_drug_file = pd.read_csv(os.path.join('data', 'pdtc_gdsc_drug_mapping.csv'), index_col=0)
             drug_list = pdtc_drug_file.index.tolist()
