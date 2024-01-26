@@ -15,9 +15,9 @@ for drug in drug_list_TCGA:
         test_auprc_list = []
         label_df = pd.read_csv(os.path.join('data', 'TCGA', drug + 'data', 'tcgalabel.csv'), index_col=0, header=0)
         test_y_true = label_df.values.squeeze()
-        result_p_path = os.path.join('result_folder', 'presult_' + drug)
+        result_p_path = os.path.join('./result/prototypical', drug)
         for i in range(5):
-            test_y_pred = np.load(os.path.join(result_p_path, str(i) + '_fold.npy'))
+            test_y_pred = np.load(os.path.join(result_p_path, 'prediction', drug+'_'+str(i)+'_fold.npy'))
             test_auc = roc_auc_score(test_y_true, test_y_pred)
             test_auprc = average_precision_score(test_y_true, test_y_pred)
             test_auc_list.append(test_auc)
@@ -39,9 +39,9 @@ for drug in drug_list_PDTC:
         test_auprc_list = []
         label_df = pd.read_csv(os.path.join('data', 'PDTC', drug + 'data', 'pdtclabel.csv'), index_col=0, header=0)
         test_y_true = label_df.values.squeeze()
-        result_p_path = os.path.join('result_folder', 'presult_' + drug)
+        result_p_path = os.path.join('./result/prototypical', drug)
         for i in range(5):
-            test_y_pred = np.load(os.path.join(result_p_path, str(i) + '_fold.npy'))
+            test_y_pred = np.load(os.path.join(result_p_path, 'prediction', drug+'_'+str(i)+'_fold.npy'))
             test_auc = roc_auc_score(test_y_true, test_y_pred)
             test_auprc = average_precision_score(test_y_true, test_y_pred)
             test_auc_list.append(test_auc)
