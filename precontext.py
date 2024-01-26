@@ -1,3 +1,4 @@
+import argparse
 import pandas as pd
 from tqdm import tqdm
 import numpy as np
@@ -263,12 +264,6 @@ def drug_pretrain(datalist):
     min_loss = float('inf')
     for epoch in range(num_epochs):
         train_loss, train_acc = pretrain(model,context_model,loader,optimizer_substruct,optimizer_context,criterion)
-        log_loss.append(train_loss)
-        log_acc.append(train_acc)
-        np.save("Context_Pretrain__loss.npy", log_loss)
-        np.save("Context_Pretrain_log_acc.npy", log_acc)
-        print('Epoch:{},loss:{}, acc:{}'.format(
-            epoch, train_loss, train_acc))
         if train_loss < min_loss:
             min_loss = train_loss
             tolerance = 0
@@ -278,3 +273,50 @@ def drug_pretrain(datalist):
             print("Early stopping triggered. Training stopped.")
             break
     return model.state_dict()
+
+def main_precontext():
+    drug_encoder_dict_pth = os.path.join('result', 'drug_encoder.pth')
+    file_path = os.path.join('data', 'smile_inchi326.csv')
+    if os.path.exists(drug_encoder_dict_pth):
+        print("pretrain done")
+    else:
+        drug_smiles_df = pd.read_csv(file_path, index_col=0)
+        smiles = drug_smiles_df['smiles'].tolist()
+        drug_pyg_list = []
+        for smile in smiles:
+            _, x, edge_index = smile_to_graph(smile)
+            x = torch.tensor(np.array(x), device=device).float()
+            edge_index = torch.tensor(edge_index, device=device).t()
+            temp_pyg = DATA.Data(
+                x=x,
+                edge_index=edge_index
+            )
+            drug_pyg_list.append(temp_pyg)
+        drug_encoder_dict = drug_pretrain(drug_pyg_list)
+        torch.save(drug_encoder_dict, drug_encoder_dict_pth)
+
+
+if __name__ == '__main__':
+    parser = argparse.ArgumentParser('drug pretrain')
+    parser.add_argument('--dataset', dest='dataset', type=str, default='./data/smile_inchi326.csv', help='choose the .csv file to train drug model')
+    parser.add_argument('--out', dest='out', type=str, default='./result/drug_encoder.pth', help='filename to save drug encoder pth')
+    args = parser.parse_args()
+    drug_encoder_dict_pth = args.out
+    file_path = args.dataset
+    if os.path.exists(drug_encoder_dict_pth):
+        print("pretrain done")
+    else:
+        drug_smiles_df = pd.read_csv(file_path, index_col=0)
+        smiles = drug_smiles_df['smiles'].tolist()
+        drug_pyg_list = []
+        for smile in smiles:
+            _, x, edge_index = smile_to_graph(smile)
+            x = torch.tensor(np.array(x), device=device).float()
+            edge_index = torch.tensor(edge_index, device=device).t()
+            temp_pyg = DATA.Data(
+                x=x,
+                edge_index=edge_index
+            )
+            drug_pyg_list.append(temp_pyg)
+        drug_encoder_dict = drug_pretrain(drug_pyg_list)
+        torch.save(drug_encoder_dict, drug_encoder_dict_pth)

@@ -52,6 +52,16 @@ def pretrain_data():
 
     return (ccleloader, ccle_test_tensor), (tcgaloader, tcga_test_tensor)
 
+def pretrain_loader(df:pd.DataFrame):
+    train_df, test_df = train_test_split(df, test_size=0.2)
+    train_tensor = torch.from_numpy(train_df.values).type(torch.float32).to(device)
+    test_tensor = torch.from_numpy(test_df.values).type(torch.float32).to(device)
+    batch_size = 64
+    train_dataset = TensorDataset(train_tensor)
+    train_dataloader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True, drop_last=True)
+    test_dataset = TensorDataset(test_tensor)
+    test_dataloader = DataLoader(test_dataset, batch_size=batch_size, shuffle=True, drop_last=True)
+    return train_dataloader, test_dataloader
 
 def PDTC_source_5fold(drug):
     measurement = 'Z_SCORE'
@@ -175,3 +185,25 @@ def TCGA_data_generator(drug):
     ccle_data_tuple = TCGA_source_5fold(drug)
     for ccle_train_data, ccle_eval_data in ccle_data_tuple:
         yield (ccle_train_data, ccle_eval_data, tcga_data)
+
+
+def other_data_generator(datafolder):
+    os.path.join(datafolder)
+    source_features_df = pd.read_csv(os.path.join(datafolder, 'sourcedata.csv'), index_col=0, header=0)
+    source_label_df = pd.read_csv(os.path.join(datafolder, 'sourcelabel.csv'), index_col=0, header=0)
+    target_features_df = pd.read_csv(os.path.join(datafolder, 'targetdata.csv'), index_col=0, header=0)
+    target_label_df = pd.read_csv(os.path.join(datafolder, 'targetlabel.csv'), index_col=0, header=0)
+    s_kfold = StratifiedKFold(n_splits=5, shuffle=True)
+    for train_index, test_index in s_kfold.split(source_features_df.values, source_label_df.values):
+        train_labeled_source_df, test_labeled_source_df = source_features_df.values[train_index], \
+                                                    source_features_df.values[test_index]
+        train_source_labels, test_source_labels = source_label_df.values[train_index], source_label_df.values[test_index]
+        # df->tensor
+        source_train_data = torch.from_numpy(train_labeled_source_df).type(torch.float32).to(device)
+        source_train_label = torch.from_numpy(train_source_labels).type(torch.float32).squeeze().to(device)
+        source_test_data = torch.from_numpy(test_labeled_source_df).type(torch.float32).to(device)
+        source_test_label = torch.from_numpy(test_source_labels).type(torch.float32).squeeze().to(device)
+        target_data = torch.from_numpy(target_features_df.values).type(torch.float32).to(device)
+        target_label = torch.from_numpy(target_label_df.values).type(torch.float32).squeeze().to(device)
+
+        yield (source_train_data, source_train_label),(source_test_data, source_test_label),(target_data, target_label)
